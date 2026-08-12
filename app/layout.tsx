@@ -1,8 +1,6 @@
 import { Geist, Geist_Mono } from "next/font/google"
 
 import "./globals.css"
-import { SiteHeader } from "@/components/site-header"
-import { ThemeProvider } from "@/components/theme-provider"
 import { cn } from "@/lib/utils"
 
 const fontSans = Geist({ subsets: ["latin"], variable: "--font-sans" })
@@ -28,14 +26,7 @@ export default function RootLayout({
         fontSans.variable
       )}
     >
-      <body>
-        <ThemeProvider>
-          <div className="flex h-svh flex-col">
-            <SiteHeader />
-            {children}
-          </div>
-        </ThemeProvider>
-      </body>
+      <body>{children}</body>
     </html>
   )
 }

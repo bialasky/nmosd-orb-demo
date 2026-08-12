@@ -132,9 +132,26 @@
   }
   body {
     position: relative;
+    min-height: 100svh;
     @apply bg-background text-foreground;
   }
   html {
     @apply font-sans;
+  }
+}
+
+::selection {
+  color: #ffffff;
+  background: #6d55f7;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }

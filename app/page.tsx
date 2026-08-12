@@ -1,14 +1,13 @@
 import type { Metadata } from "next"
 
-import { MODELS } from "@/lib/models"
-import { Chat } from "@/components/chat"
+import { OrbExperience } from "@/components/orb-experience"
 
 export const metadata: Metadata = {
-  title: "Chat",
+  title: "Aria — NMOSD Orb Concept",
   description:
-    "A chatbot template built using shadcn/ui, shadcn/react and shadcn/typeset, powered by the Vercel AI Gateway.",
+    "An interactive NMOSD voice assistant orb and chat experience concept.",
 }
 
 export default function Page() {
-  return <Chat models={MODELS} />
+  return <OrbExperience />
 }
