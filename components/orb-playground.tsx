@@ -40,10 +40,38 @@ const SHARED_KEYS = [
 ] as const satisfies readonly (keyof OrbTweak)[]
 
 const STATE_KEYS: Record<MotionOrbState, readonly (keyof OrbTweak)[]> = {
-  idle: ["micScale", "micStroke", "idleShadow"],
-  listening: ["polarAmp", "polarThick", "polarSpeed", "polarInset", "polarAlpha"],
-  thinking: ["waveAmp", "waveSpread", "waveSpeed", "waveThick", "waveAlpha", "centerline"],
-  speaking: ["waveAmp", "waveSpread", "waveSpeed", "waveThick", "waveAlpha", "centerline"],
+  idle: ["micScale", "micStroke", "idleShadow", "arcGlow"],
+  listening: [
+    "polarAmp",
+    "polarThick",
+    "polarSpeed",
+    "polarInset",
+    "polarAlpha",
+    "polarEdge",
+  ],
+  thinking: [
+    "waveAmp",
+    "waveSpread",
+    "waveSpeed",
+    "waveThick",
+    "waveAlpha",
+    "waveEdge",
+    "waveWaist",
+    "waveRise",
+    "waveDrift",
+    "centerline",
+  ],
+  speaking: [
+    "waveAmp",
+    "waveSpread",
+    "waveSpeed",
+    "waveThick",
+    "waveAlpha",
+    "waveEdge",
+    "voiceRate",
+    "voicePause",
+    "centerline",
+  ],
 }
 
 const SLIDER_META: Record<
@@ -68,6 +96,14 @@ const SLIDER_META: Record<
   waveThick: { label: "Wave thickness", min: 0.2, max: 2.4, step: 0.02 },
   waveAlpha: { label: "Wave opacity", min: 0, max: 2.2, step: 0.02 },
   centerline: { label: "Centerline", min: 0, max: 2, step: 0.02 },
+  arcGlow: { label: "Gold arc", min: 0, max: 2.2, step: 0.02 },
+  polarEdge: { label: "Edge glow", min: 0, max: 2.2, step: 0.02 },
+  waveEdge: { label: "Edge glow", min: 0, max: 2.2, step: 0.02 },
+  waveWaist: { label: "Center dip", min: 0, max: 2, step: 0.02 },
+  waveRise: { label: "Right rise", min: 0, max: 2, step: 0.02 },
+  waveDrift: { label: "Randomness", min: 0, max: 2, step: 0.02 },
+  voiceRate: { label: "Voice cadence", min: 0.2, max: 2.5, step: 0.02 },
+  voicePause: { label: "Pause depth", min: 0, max: 2, step: 0.02 },
 }
 
 type StoredTweaks = Record<MotionOrbState, OrbTweak>

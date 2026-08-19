@@ -41,6 +41,14 @@ export type OrbTweak = {
   waveThick: number
   waveAlpha: number
   centerline: number
+  arcGlow: number
+  polarEdge: number
+  waveEdge: number
+  waveWaist: number
+  waveRise: number
+  waveDrift: number
+  voiceRate: number
+  voicePause: number
 }
 
 export const DEFAULT_ORB_TWEAK: OrbTweak = {
@@ -62,6 +70,14 @@ export const DEFAULT_ORB_TWEAK: OrbTweak = {
   waveThick: 1,
   waveAlpha: 1,
   centerline: 1,
+  arcGlow: 1,
+  polarEdge: 1,
+  waveEdge: 1,
+  waveWaist: 1,
+  waveRise: 1,
+  waveDrift: 1,
+  voiceRate: 1,
+  voicePause: 1,
 }
 
 export const STATE_TWEAK_DEFAULTS: Record<MotionOrbState, OrbTweak> = {
@@ -335,16 +351,19 @@ function drawGoldArc(
 
   ctx.save()
   ctx.lineCap = "round"
-  ctx.shadowColor = rgbCss(palette.warm, 0.7 * alpha)
-  ctx.shadowBlur = r * 0.2
-  ctx.strokeStyle = rgbCss(gold, 0.5 * alpha)
+  ctx.shadowColor = rgbCss(palette.warm, Math.min(1, 0.7 * alpha * tweak.arcGlow))
+  ctx.shadowBlur = r * 0.2 * Math.min(1.6, tweak.arcGlow)
+  ctx.strokeStyle = rgbCss(gold, Math.min(1, 0.5 * alpha * tweak.arcGlow))
   ctx.lineWidth = r * 0.055 * tweak.borderWidth
   ctx.beginPath()
   ctx.arc(cx, cy, r, start, end)
   ctx.stroke()
 
   ctx.shadowBlur = r * 0.08
-  ctx.strokeStyle = rgbCss(mixRgb(gold, [255, 240, 200], 0.4), 0.95 * alpha)
+  ctx.strokeStyle = rgbCss(
+    mixRgb(gold, [255, 240, 200], 0.4),
+    Math.min(1, 0.95 * alpha * tweak.arcGlow)
+  )
   ctx.lineWidth = Math.max(1.8, r * 0.024 * tweak.borderWidth)
   ctx.beginPath()
   ctx.arc(cx, cy, r, start + 0.04, end - 0.04)
@@ -518,12 +537,13 @@ const SPEAK_SHEETS: FlowSheet[] = [
 
 // Simulated speech loudness: fast syllable flutter gated by slower phrase
 // bursts, dipping near-silent between phrases but never fully dead.
-function voiceEnvelope(t: number) {
+// rate scales the syllable cadence; pause deepens/lengthens the gaps.
+function voiceEnvelope(t: number, rate: number, pause: number) {
   const syllable =
-    0.62 + 0.38 * Math.sin(t * 7.1) * Math.sin(t * 4.7 + 0.6)
+    0.62 + 0.38 * Math.sin(t * 7.1 * rate) * Math.sin(t * 4.7 * rate + 0.6)
   const phrase =
     0.5 + 0.5 * Math.sin(t * 0.8) + 0.3 * Math.sin(t * 0.33 + 1.7)
-  const gate = Math.pow(Math.min(1, Math.max(0, phrase)), 0.8)
+  const gate = Math.pow(Math.min(1, Math.max(0, phrase)), 0.8 * pause)
   return (0.18 + 0.82 * gate) * syllable
 }
 
@@ -565,7 +585,7 @@ function drawSilkWaves(
   const time = t * tweak.waveSpeed
   const amp = waves * tweak.waveAmp
   const spread = tweak.waveSpread * 1.4
-  const voice = voiceEnvelope(time)
+  const voice = voiceEnvelope(time, tweak.voiceRate, tweak.voicePause)
   const steps = 110
 
   ctx.save()
@@ -609,15 +629,15 @@ function drawSilkWaves(
     ctx.globalCompositeOperation = "lighter"
     ctx.shadowColor = rgbCss(
       mixRgb(palette.cool, [220, 190, 255], 0.5),
-      alpha * 0.8
+      Math.min(1, alpha * 0.8 * tweak.waveEdge)
     )
-    ctx.shadowBlur = r * 0.045
+    ctx.shadowBlur = r * 0.045 * Math.min(1.6, tweak.waveEdge)
     ctx.strokeStyle = bandGradient(
       ctx,
       cx,
       r,
       palette,
-      Math.min(1, alpha * sheet.edgeAlpha * 2.2),
+      Math.min(1, alpha * sheet.edgeAlpha * 2.2 * tweak.waveEdge),
       sheet.mode === "deep" ? "violet" : sheet.mode
     )
     ctx.lineWidth = Math.max(1.1, r * 0.009 * tweak.waveThick)
@@ -715,11 +735,11 @@ const FLOW_SHEETS: FlowSheet[] = [
 
 // Height profile matching the reference: medium waves entering on the
 // left, a low waist just before center, tallest billows on the right.
-function flowProfile(nx: number) {
+function flowProfile(nx: number, waistDepth: number, riseGain: number) {
   const w = (nx + 0.05) / 0.4
   const waist = Math.exp(-w * w)
   const rise = 0.5 + 0.5 * Math.tanh((nx - 0.3) / 0.3)
-  return 0.74 - 0.3 * waist + 0.55 * rise
+  return Math.max(0.06, 0.74 - waistDepth * waist + riseGain * rise)
 }
 
 function flowEdgeY(
@@ -728,16 +748,18 @@ function flowEdgeY(
   edge: FlowEdge,
   seed: number,
   spread: number,
-  amp: number
+  amp: number,
+  tweak: OrbTweak
 ) {
   const chord = Math.sqrt(Math.max(0, 1 - nx * nx))
   const env = Math.pow(chord, 0.5)
-  const prof = flowProfile(nx)
+  const prof = flowProfile(nx, 0.3 * tweak.waveWaist, 0.55 * tweak.waveRise)
   const p = edge.phase + seed * 0.013
   // Slow incommensurate drifts keep the lobes from ever repeating cleanly.
-  const m1 = 0.72 + 0.28 * Math.sin(t * 0.23 + p * 2.3)
-  const m2 = 0.72 + 0.28 * Math.sin(t * 0.31 + p * 1.1)
-  const m3 = 0.6 + 0.4 * Math.sin(t * 0.17 + p * 3.1)
+  const drift = tweak.waveDrift
+  const m1 = 0.72 + 0.28 * drift * Math.sin(t * 0.23 + p * 2.3)
+  const m2 = 0.72 + 0.28 * drift * Math.sin(t * 0.31 + p * 1.1)
+  const m3 = 0.6 + 0.4 * drift * Math.sin(t * 0.17 + p * 3.1)
   const wave =
     Math.sin(nx * edge.f1 - t * edge.s1 + p) * 0.5 * m1 +
     Math.sin(nx * edge.f2 - t * edge.s2 + p * 1.9) * 0.32 * m2 +
@@ -774,11 +796,12 @@ function drawThinkingFlow(
       const x = cx + nx * r
       topPts.push([
         x,
-        cy + flowEdgeY(nx, time, sheet.top, seed, spread, amp) * r,
+        cy + flowEdgeY(nx, time, sheet.top, seed, spread, amp, tweak) * r,
       ])
       botPts.push([
         x,
-        cy + flowEdgeY(nx, time, sheet.bottom, seed + 40, spread, amp) * r,
+        cy +
+          flowEdgeY(nx, time, sheet.bottom, seed + 40, spread, amp, tweak) * r,
       ])
     }
 
@@ -800,15 +823,15 @@ function drawThinkingFlow(
     ctx.globalCompositeOperation = "lighter"
     ctx.shadowColor = rgbCss(
       mixRgb(palette.cool, [220, 190, 255], 0.5),
-      alpha * 0.8
+      Math.min(1, alpha * 0.8 * tweak.waveEdge)
     )
-    ctx.shadowBlur = r * 0.045
+    ctx.shadowBlur = r * 0.045 * Math.min(1.6, tweak.waveEdge)
     ctx.strokeStyle = bandGradient(
       ctx,
       cx,
       r,
       palette,
-      Math.min(1, alpha * sheet.edgeAlpha * 2.2),
+      Math.min(1, alpha * sheet.edgeAlpha * 2.2 * tweak.waveEdge),
       sheet.mode === "deep" ? "violet" : sheet.mode
     )
     ctx.lineWidth = Math.max(1.1, r * 0.009 * tweak.waveThick)
@@ -1178,14 +1201,17 @@ function drawListeningRibbons(
       if (i === 0) ctx.moveTo(x, y)
       else ctx.lineTo(x, y)
     }
-    ctx.shadowColor = rgbCss(mixRgb(palette.cool, [220, 190, 255], 0.5), alpha * 0.8)
-    ctx.shadowBlur = r * 0.045
+    ctx.shadowColor = rgbCss(
+      mixRgb(palette.cool, [220, 190, 255], 0.5),
+      Math.min(1, alpha * 0.8 * tweak.polarEdge)
+    )
+    ctx.shadowBlur = r * 0.045 * Math.min(1.6, tweak.polarEdge)
     ctx.strokeStyle = sheetConic(
       ctx,
       cx,
       cy,
       palette,
-      alpha * sheet.edgeAlpha,
+      Math.min(1, alpha * sheet.edgeAlpha * tweak.polarEdge),
       sheet.mode === "deep" ? "lavender" : sheet.mode
     )
     ctx.lineWidth = Math.max(1.1, r * 0.009)
