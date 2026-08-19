@@ -1,7 +1,16 @@
+import type { Metadata } from "next"
 import { Geist, Geist_Mono } from "next/font/google"
 
-import "./globals.css"
+import { ThemeProvider } from "@/components/theme-provider"
 import { cn } from "@/lib/utils"
+
+import "./globals.css"
+
+export const metadata: Metadata = {
+  title: "Orb — NORA UI",
+  description:
+    "Motion orb with custom colors and agent states for the NORA NMOSD widget.",
+}
 
 const fontSans = Geist({ subsets: ["latin"], variable: "--font-sans" })
 
@@ -26,7 +35,11 @@ export default function RootLayout({
         fontSans.variable
       )}
     >
-      <body>{children}</body>
+      <body>
+        <ThemeProvider>
+          {children}
+        </ThemeProvider>
+      </body>
     </html>
   )
 }
