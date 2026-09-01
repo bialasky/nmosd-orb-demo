@@ -187,7 +187,7 @@ export function NoraWidget() {
             "0 24px 60px rgba(8, 6, 20, 0.45), inset 0 1px 0 rgba(255,255,255,0.08)",
         }}
       >
-        <MotionOrb state="thinking" className="mb-4 size-[7.5rem]" />
+        <MotionOrb state="thinking" className="mb-4 size-[7.5rem]" active={!open} />
         <p className="text-[0.95rem] leading-6 text-white">
           Chat with{" "}
           <span className="text-[1.35rem] font-semibold tracking-[-0.04em]">
@@ -306,11 +306,11 @@ export function NoraWidget() {
               aria-label="Start talking to NORA"
               className="relative mt-[10%] size-[min(70vw,268px)] rounded-full outline-none transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] focus-visible:ring-2 focus-visible:ring-[#b9a4ff] active:scale-[0.96]"
             >
-              <MotionOrb state="idle" className="h-full w-full" />
+              <MotionOrb state="idle" className="h-full w-full" active={open} />
             </button>
           ) : (
             <div className="relative mt-[14%] size-[min(72vw,280px)]">
-              <MotionOrb state={orbState} className="h-full w-full" />
+              <MotionOrb state={orbState} className="h-full w-full" active={open} />
             </div>
           )}
 

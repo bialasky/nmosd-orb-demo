@@ -121,6 +121,7 @@ type MotionOrbProps = {
   tweak?: OrbTweak
   thinkingVariant?: ThinkingVariant
   className?: string
+  active?: boolean
 }
 
 type Visual = {
@@ -315,15 +316,17 @@ function drawOrbBorder(
     ctx.arc(cx, cy, reach, 0, Math.PI * 2)
     ctx.fill()
   }
-  ctx.shadowColor = rgbCss(palette.cool, 0.8)
-  ctx.shadowBlur = r * 0.34 * tweak.borderGlow * glow
+  ctx.strokeStyle = rgbCss(rim, 0.18 * Math.min(1.4, glow) * tweak.borderGlow)
+  ctx.lineWidth = r * 0.09 * tweak.borderWidth
+  ctx.beginPath()
+  ctx.arc(cx, cy, r, 0, Math.PI * 2)
+  ctx.stroke()
   ctx.strokeStyle = rgbCss(rim, 0.3 * Math.min(1.4, glow))
   ctx.lineWidth = r * 0.055 * tweak.borderWidth
   ctx.beginPath()
   ctx.arc(cx, cy, r, 0, Math.PI * 2)
   ctx.stroke()
 
-  ctx.shadowBlur = r * 0.12 * tweak.borderGlow * glow
   ctx.strokeStyle = rgbCss(
     mixRgb(rim, [255, 253, 255], Math.min(0.85, Math.max(0, glow - 1) * 1.2)),
     0.95
@@ -351,15 +354,17 @@ function drawGoldArc(
 
   ctx.save()
   ctx.lineCap = "round"
-  ctx.shadowColor = rgbCss(palette.warm, Math.min(1, 0.7 * alpha * tweak.arcGlow))
-  ctx.shadowBlur = r * 0.2 * Math.min(1.6, tweak.arcGlow)
+  ctx.strokeStyle = rgbCss(gold, Math.min(1, 0.22 * alpha * tweak.arcGlow))
+  ctx.lineWidth = r * 0.1 * tweak.borderWidth
+  ctx.beginPath()
+  ctx.arc(cx, cy, r, start, end)
+  ctx.stroke()
   ctx.strokeStyle = rgbCss(gold, Math.min(1, 0.5 * alpha * tweak.arcGlow))
   ctx.lineWidth = r * 0.055 * tweak.borderWidth
   ctx.beginPath()
   ctx.arc(cx, cy, r, start, end)
   ctx.stroke()
 
-  ctx.shadowBlur = r * 0.08
   ctx.strokeStyle = rgbCss(
     mixRgb(gold, [255, 240, 200], 0.4),
     Math.min(1, 0.95 * alpha * tweak.arcGlow)
@@ -586,7 +591,10 @@ function drawSilkWaves(
   const amp = waves * tweak.waveAmp
   const spread = tweak.waveSpread * 1.4
   const voice = voiceEnvelope(time, tweak.voiceRate, tweak.voicePause)
-  const steps = 110
+  const steps = sheetStepCount(r, 110)
+  const count = steps + 1
+  const topPts = pooledPts(0, count)
+  const botPts = pooledPts(1, count)
 
   ctx.save()
   ctx.beginPath()
@@ -595,31 +603,28 @@ function drawSilkWaves(
 
   for (const sheet of SPEAK_SHEETS) {
     const alpha = sheet.alpha * waves * tweak.waveAlpha * (0.55 + 0.45 * voice)
-    const topPts: [number, number][] = []
-    const botPts: [number, number][] = []
     for (let i = 0; i <= steps; i++) {
       const nx = -1 + (2 * i) / steps
       const x = cx + nx * r
-      topPts.push([
-        x,
-        cy + speakEdgeY(nx, time, sheet.top, seed, spread, amp, voice) * r,
-      ])
-      botPts.push([
-        x,
+      const top = topPts[i]
+      const bot = botPts[i]
+      top[0] = x
+      top[1] = cy + speakEdgeY(nx, time, sheet.top, seed, spread, amp, voice) * r
+      bot[0] = x
+      bot[1] =
         cy +
-          speakEdgeY(nx, time, sheet.bottom, seed + 40, spread, amp, voice) * r,
-      ])
+        speakEdgeY(nx, time, sheet.bottom, seed + 40, spread, amp, voice) * r
     }
 
     ctx.globalCompositeOperation =
       sheet.mode === "deep" ? "source-over" : "lighter"
     ctx.beginPath()
-    for (let i = 0; i < topPts.length; i++) {
+    for (let i = 0; i < count; i++) {
       const [x, y] = topPts[i]
       if (i === 0) ctx.moveTo(x, y)
       else ctx.lineTo(x, y)
     }
-    for (let i = botPts.length - 1; i >= 0; i--) {
+    for (let i = count - 1; i >= 0; i--) {
       ctx.lineTo(botPts[i][0], botPts[i][1])
     }
     ctx.closePath()
@@ -627,12 +632,15 @@ function drawSilkWaves(
     ctx.fill()
 
     ctx.globalCompositeOperation = "lighter"
-    ctx.shadowColor = rgbCss(
-      mixRgb(palette.cool, [220, 190, 255], 0.5),
-      Math.min(1, alpha * 0.8 * tweak.waveEdge)
+    const glowStyle = bandGradient(
+      ctx,
+      cx,
+      r,
+      palette,
+      Math.min(1, alpha * sheet.edgeAlpha * 0.7 * tweak.waveEdge),
+      sheet.mode === "deep" ? "violet" : sheet.mode
     )
-    ctx.shadowBlur = r * 0.045 * Math.min(1.6, tweak.waveEdge)
-    ctx.strokeStyle = bandGradient(
+    const edgeStyle = bandGradient(
       ctx,
       cx,
       r,
@@ -640,19 +648,24 @@ function drawSilkWaves(
       Math.min(1, alpha * sheet.edgeAlpha * 2.2 * tweak.waveEdge),
       sheet.mode === "deep" ? "violet" : sheet.mode
     )
-    ctx.lineWidth = Math.max(1.1, r * 0.009 * tweak.waveThick)
+    const glowWidth = Math.max(2.4, r * 0.028 * Math.min(1.6, tweak.waveEdge))
+    const lineWidth = Math.max(1.1, r * 0.009 * tweak.waveThick)
     ctx.lineJoin = "round"
     ctx.lineCap = "round"
     for (const pts of [topPts, botPts]) {
       ctx.beginPath()
-      for (let i = 0; i < pts.length; i++) {
+      for (let i = 0; i < count; i++) {
         const [x, y] = pts[i]
         if (i === 0) ctx.moveTo(x, y)
         else ctx.lineTo(x, y)
       }
+      ctx.strokeStyle = glowStyle
+      ctx.lineWidth = glowWidth
+      ctx.stroke()
+      ctx.strokeStyle = edgeStyle
+      ctx.lineWidth = lineWidth
       ctx.stroke()
     }
-    ctx.shadowBlur = 0
   }
 
   drawGlowSpot(
@@ -785,35 +798,35 @@ function drawThinkingFlow(
   const time = t * tweak.waveSpeed
   const amp = think * tweak.waveAmp
   const spread = tweak.waveSpread * 1.4
-  const steps = 110
+  const steps = sheetStepCount(r, 110)
+  const count = steps + 1
+  const topPts = pooledPts(0, count)
+  const botPts = pooledPts(1, count)
 
   for (const sheet of FLOW_SHEETS) {
     const alpha = sheet.alpha * think * tweak.waveAlpha
-    const topPts: [number, number][] = []
-    const botPts: [number, number][] = []
     for (let i = 0; i <= steps; i++) {
       const nx = -1 + (2 * i) / steps
       const x = cx + nx * r
-      topPts.push([
-        x,
-        cy + flowEdgeY(nx, time, sheet.top, seed, spread, amp, tweak) * r,
-      ])
-      botPts.push([
-        x,
+      const top = topPts[i]
+      const bot = botPts[i]
+      top[0] = x
+      top[1] = cy + flowEdgeY(nx, time, sheet.top, seed, spread, amp, tweak) * r
+      bot[0] = x
+      bot[1] =
         cy +
-          flowEdgeY(nx, time, sheet.bottom, seed + 40, spread, amp, tweak) * r,
-      ])
+        flowEdgeY(nx, time, sheet.bottom, seed + 40, spread, amp, tweak) * r
     }
 
     ctx.globalCompositeOperation =
       sheet.mode === "deep" ? "source-over" : "lighter"
     ctx.beginPath()
-    for (let i = 0; i < topPts.length; i++) {
+    for (let i = 0; i < count; i++) {
       const [x, y] = topPts[i]
       if (i === 0) ctx.moveTo(x, y)
       else ctx.lineTo(x, y)
     }
-    for (let i = botPts.length - 1; i >= 0; i--) {
+    for (let i = count - 1; i >= 0; i--) {
       ctx.lineTo(botPts[i][0], botPts[i][1])
     }
     ctx.closePath()
@@ -821,12 +834,15 @@ function drawThinkingFlow(
     ctx.fill()
 
     ctx.globalCompositeOperation = "lighter"
-    ctx.shadowColor = rgbCss(
-      mixRgb(palette.cool, [220, 190, 255], 0.5),
-      Math.min(1, alpha * 0.8 * tweak.waveEdge)
+    const glowStyle = bandGradient(
+      ctx,
+      cx,
+      r,
+      palette,
+      Math.min(1, alpha * sheet.edgeAlpha * 0.7 * tweak.waveEdge),
+      sheet.mode === "deep" ? "violet" : sheet.mode
     )
-    ctx.shadowBlur = r * 0.045 * Math.min(1.6, tweak.waveEdge)
-    ctx.strokeStyle = bandGradient(
+    const edgeStyle = bandGradient(
       ctx,
       cx,
       r,
@@ -834,19 +850,24 @@ function drawThinkingFlow(
       Math.min(1, alpha * sheet.edgeAlpha * 2.2 * tweak.waveEdge),
       sheet.mode === "deep" ? "violet" : sheet.mode
     )
-    ctx.lineWidth = Math.max(1.1, r * 0.009 * tweak.waveThick)
+    const glowWidth = Math.max(2.4, r * 0.028 * Math.min(1.6, tweak.waveEdge))
+    const lineWidth = Math.max(1.1, r * 0.009 * tweak.waveThick)
     ctx.lineJoin = "round"
     ctx.lineCap = "round"
     for (const pts of [topPts, botPts]) {
       ctx.beginPath()
-      for (let i = 0; i < pts.length; i++) {
+      for (let i = 0; i < count; i++) {
         const [x, y] = pts[i]
         if (i === 0) ctx.moveTo(x, y)
         else ctx.lineTo(x, y)
       }
+      ctx.strokeStyle = glowStyle
+      ctx.lineWidth = glowWidth
+      ctx.stroke()
+      ctx.strokeStyle = edgeStyle
+      ctx.lineWidth = lineWidth
       ctx.stroke()
     }
-    ctx.shadowBlur = 0
   }
 
   drawCenterline(ctx, cx, cy, r, think * tweak.centerline * 0.3)
@@ -1006,12 +1027,14 @@ function drawThinkingWeave(
   ctx.lineJoin = "round"
   ctx.lineCap = "round"
 
-  ctx.filter = `blur(${Math.max(1.5, r * 0.01)}px)`
+  traceCurve(0, Math.PI * 2, points)
+  ctx.strokeStyle = waveGradient(ctx, cx, r, palette, 0.12 * think * tweak.waveAlpha)
+  ctx.lineWidth = Math.max(3.5, r * 0.036 * tweak.waveThick)
+  ctx.stroke()
   traceCurve(0, Math.PI * 2, points)
   ctx.strokeStyle = waveGradient(ctx, cx, r, palette, 0.2 * think * tweak.waveAlpha)
   ctx.lineWidth = Math.max(2, r * 0.02 * tweak.waveThick)
   ctx.stroke()
-  ctx.filter = "none"
 
   traceCurve(0, Math.PI * 2, points)
   ctx.strokeStyle = waveGradient(ctx, cx, r, palette, 0.55 * think * tweak.waveAlpha)
@@ -1156,7 +1179,9 @@ function drawListeningRibbons(
   tweak: OrbTweak
 ) {
   if (polar < 0.03) return
-  const steps = 220
+  const steps = sheetStepCount(r, 160)
+  const count = steps + 1
+  const inner = pooledPts(2, count)
   const inset = Math.min(0.4, Math.max(0, tweak.polarInset))
   const band = r * 0.2 * tweak.polarThick
 
@@ -1182,13 +1207,14 @@ function drawListeningRibbons(
       if (i === 0) ctx.moveTo(x, y)
       else ctx.lineTo(x, y)
     }
-    const inner: [number, number][] = []
     for (let i = steps; i >= 0; i--) {
       const a = (i / steps) * Math.PI * 2
       const depth = silkDepth(a, t, sheet, seed, tweak.polarSpeed) * tweak.polarAmp
       const rad = Math.max(r * 0.5, outerBase - band * depth)
-      inner.push([cx + Math.cos(a) * rad, cy + Math.sin(a) * rad])
-      ctx.lineTo(inner[inner.length - 1][0], inner[inner.length - 1][1])
+      const pt = inner[steps - i]
+      pt[0] = cx + Math.cos(a) * rad
+      pt[1] = cy + Math.sin(a) * rad
+      ctx.lineTo(pt[0], pt[1])
     }
     ctx.closePath()
     ctx.fillStyle = sheetConic(ctx, cx, cy, palette, alpha, sheet.mode)
@@ -1196,16 +1222,23 @@ function drawListeningRibbons(
 
     ctx.globalCompositeOperation = "lighter"
     ctx.beginPath()
-    for (let i = 0; i < inner.length; i++) {
+    for (let i = 0; i < count; i++) {
       const [x, y] = inner[i]
       if (i === 0) ctx.moveTo(x, y)
       else ctx.lineTo(x, y)
     }
-    ctx.shadowColor = rgbCss(
-      mixRgb(palette.cool, [220, 190, 255], 0.5),
-      Math.min(1, alpha * 0.8 * tweak.polarEdge)
+    ctx.strokeStyle = sheetConic(
+      ctx,
+      cx,
+      cy,
+      palette,
+      Math.min(1, alpha * sheet.edgeAlpha * 0.45 * tweak.polarEdge),
+      sheet.mode === "deep" ? "lavender" : sheet.mode
     )
-    ctx.shadowBlur = r * 0.045 * Math.min(1.6, tweak.polarEdge)
+    ctx.lineWidth = Math.max(2.4, r * 0.028 * Math.min(1.6, tweak.polarEdge))
+    ctx.lineJoin = "round"
+    ctx.lineCap = "round"
+    ctx.stroke()
     ctx.strokeStyle = sheetConic(
       ctx,
       cx,
@@ -1215,16 +1248,29 @@ function drawListeningRibbons(
       sheet.mode === "deep" ? "lavender" : sheet.mode
     )
     ctx.lineWidth = Math.max(1.1, r * 0.009)
-    ctx.lineJoin = "round"
-    ctx.lineCap = "round"
     ctx.stroke()
-    ctx.shadowBlur = 0
   }
 
   ctx.restore()
 }
 
 const TWEAK_KEYS = Object.keys(DEFAULT_ORB_TWEAK) as (keyof OrbTweak)[]
+const POINT_POOL: [number, number][][] = []
+const TARGET_FRAME_DT = 1 / 60
+
+function pooledPts(slot: number, count: number) {
+  let pts = POINT_POOL[slot]
+  if (!pts) {
+    pts = []
+    POINT_POOL[slot] = pts
+  }
+  for (let i = pts.length; i < count; i++) pts.push([0, 0])
+  return pts
+}
+
+function sheetStepCount(radius: number, max: number) {
+  return Math.max(48, Math.min(max, Math.round(radius / 2.6)))
+}
 
 export function MotionOrb({
   state,
@@ -1234,27 +1280,31 @@ export function MotionOrb({
   tweak,
   thinkingVariant = "flow",
   className,
+  active = true,
 }: MotionOrbProps) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const kickRef = useRef<() => void>(() => {})
   const resolved = agentState ?? state ?? "idle"
   const stateRef = useRef(resolved)
   const colorsRef = useRef(colors)
   const seedRef = useRef(seed)
   const tweakRef = useRef(tweak ?? STATE_TWEAK_DEFAULTS[resolved])
   const variantRef = useRef(thinkingVariant)
+  const activeRef = useRef(active)
   stateRef.current = resolved
   colorsRef.current = colors
   seedRef.current = seed
   tweakRef.current = tweak ?? STATE_TWEAK_DEFAULTS[resolved]
   variantRef.current = thinkingVariant
+  activeRef.current = active
 
   useEffect(() => {
     const wrap = wrapRef.current
     const canvas = canvasRef.current
     if (!wrap || !canvas) return
 
-    const ctx = canvas.getContext("2d", { alpha: true })
+    const ctx = canvas.getContext("2d", { alpha: true, desynchronized: true })
     if (!ctx) return
 
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches
@@ -1264,11 +1314,18 @@ export function MotionOrb({
     let running = true
     let last = performance.now()
     let elapsed = 0.6
+    let acc = 0
+    let lastSize = 0
+    let lastDpr = 0
+    let onScreen = true
 
     const resize = () => {
       const dpr = Math.min(window.devicePixelRatio || 1, 2)
       const bounds = wrap.getBoundingClientRect()
       const size = Math.max(1, Math.floor(Math.min(bounds.width, bounds.height)))
+      if (size === lastSize && dpr === lastDpr) return
+      lastSize = size
+      lastDpr = dpr
       canvas.width = size * dpr
       canvas.height = size * dpr
       canvas.style.width = `${size}px`
@@ -1305,31 +1362,74 @@ export function MotionOrb({
       drawGoldArc(ctx, cx, cy, r, palette, visual.idle, smooth)
     }
 
+    const canRun = () =>
+      running &&
+      activeRef.current &&
+      onScreen &&
+      document.visibilityState === "visible"
+
+    const loop = (now: number) => {
+      if (!canRun()) {
+        frame = 0
+        return
+      }
+      const raw = Math.min(0.05, (now - last) / 1000)
+      last = now
+      acc += raw
+      if (acc >= TARGET_FRAME_DT) {
+        const dt = Math.min(acc, 0.05)
+        acc = 0
+        elapsed += dt
+        draw(dt)
+      }
+      frame = requestAnimationFrame(loop)
+    }
+
+    const kick = () => {
+      if (!canRun() || frame) return
+      last = performance.now()
+      acc = TARGET_FRAME_DT
+      frame = requestAnimationFrame(loop)
+    }
+    kickRef.current = kick
+
     resize()
     draw(0)
     const observer = new ResizeObserver(resize)
     observer.observe(wrap)
+    const io = new IntersectionObserver((entries) => {
+      onScreen = entries.some((entry) => entry.isIntersecting)
+      if (onScreen) kick()
+    })
+    io.observe(wrap)
+    const onVis = () => {
+      if (document.visibilityState === "visible") kick()
+    }
+    document.addEventListener("visibilitychange", onVis)
 
     if (reduced) {
-      return () => observer.disconnect()
+      return () => {
+        running = false
+        observer.disconnect()
+        io.disconnect()
+        document.removeEventListener("visibilitychange", onVis)
+      }
     }
 
-    const loop = (now: number) => {
-      if (!running) return
-      const dt = Math.min(0.05, (now - last) / 1000)
-      last = now
-      elapsed += dt
-      draw(dt)
-      frame = requestAnimationFrame(loop)
-    }
-    frame = requestAnimationFrame(loop)
+    kick()
 
     return () => {
       running = false
       cancelAnimationFrame(frame)
       observer.disconnect()
+      io.disconnect()
+      document.removeEventListener("visibilitychange", onVis)
     }
   }, [])
+
+  useEffect(() => {
+    if (active) kickRef.current()
+  }, [active])
 
   return (
     <div ref={wrapRef} className={className}>

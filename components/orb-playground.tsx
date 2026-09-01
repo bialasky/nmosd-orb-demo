@@ -187,7 +187,7 @@ function Slider({
 export function OrbPlayground() {
   const [agentState, setAgentState] = useState<MotionOrbState>("idle")
   const [colors, setColors] = useState<[string, string]>(DEFAULT_ORB_COLORS)
-  const [seed, setSeed] = useState(1000)
+  const [seed] = useState(1000)
   const [tweaks, setTweaks] = useState<StoredTweaks>(cloneDefaults)
   const [thinkingVariant, setThinkingVariant] = useState<ThinkingVariant>("flow")
   const [copied, setCopied] = useState(false)
